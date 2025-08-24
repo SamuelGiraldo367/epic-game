@@ -1,219 +1,615 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>World Quiz Game</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🌍 English World Quiz — Fixed & Expanded</title>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
   <style>
+    :root {
+      --bg: #0f172a;      /* slate-900 */
+      --card: #111827;    /* gray-900 */
+      --muted: #94a3b8;   /* slate-400 */
+      --primary: #38bdf8; /* sky-400 */
+      --accent: #22d3ee;  /* cyan-400 */
+      --success: #22c55e; /* green-500 */
+      --danger: #ef4444;  /* red-500 */
+      --ring: rgba(56, 189, 248, .45);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      margin:0; font-family:Arial, sans-serif; background:#f4f6f9; color:#333;
-      display:flex; height:100vh;
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+      color: #e5e7eb;
+      background: radial-gradient(1200px 700px at 20% -10%, rgba(34,211,238,.12), transparent),
+                  radial-gradient(900px 500px at 110% 10%, rgba(56,189,248,.10), transparent),
+                  var(--bg);
     }
-    #map { flex:2; }
-    #sidebar {
-      flex:1; background:white; padding:15px; display:flex; flex-direction:column;
-      border-left:2px solid #ddd;
+
+    header { padding: 24px 20px 8px; text-align: center; }
+    header h1 { margin: 0 0 8px; font-size: clamp(20px, 3vw, 34px); letter-spacing: .3px; }
+    header p { margin: 0; color: var(--muted); }
+
+    .container {
+      max-width: 1200px;
+      margin: 16px auto 40px;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 16px;
     }
-    h2 { margin:5px 0; }
-    .option { background:#e0e0e0; margin:5px 0; padding:8px; border-radius:8px; cursor:pointer; }
-    .option:hover { background:#d0d0ff; }
-    .correct { background:#a0e7a0 !important; }
-    .wrong { background:#f8a0a0 !important; }
-    .pill {
-      display:inline-block; padding:5px 10px; border-radius:20px; margin:2px;
-      cursor:pointer; background:#ddd;
+    @media (max-width: 980px){ .container { grid-template-columns: 1fr; } }
+
+    /* Card */
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(148,163,184,.15);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      overflow: hidden;
     }
-    .pill[data-active="true"] { background:#7dafff; color:white; }
-    .tag { display:inline-block; padding:3px 7px; margin:2px; background:#7dafff; color:white; border-radius:12px; font-size:0.8em; }
-    img { max-width:100%; margin:10px 0; border-radius:10px; }
-    button { margin:5px; padding:8px 12px; border:none; border-radius:6px; cursor:pointer; }
-    #resetBtn { background:#f66; color:white; }
-    #startBtn { background:#6c6; color:white; }
+    .card .title {
+      display:flex; align-items:center; gap:10px; padding:14px 16px;
+      border-bottom: 1px solid rgba(148,163,184,.15);
+      background: linear-gradient(180deg, rgba(2,6,23,.8), rgba(2,6,23,.4));
+    }
+    .title .dot { width:10px; height:10px; border-radius:50%; background: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+
+    /* Map */
+    #map { height: 62vh; min-height: 420px; width: 100%; }
+    .leaflet-container { background: #0b1020; }
+
+    /* Sidebar */
+    .panel { padding: 16px; display: grid; gap: 14px; }
+    label { font-size: 14px; color: var(--muted); }
+    select, button, .pill {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,.2);
+      background: rgba(2,6,23,.6);
+      color: #e5e7eb;
+      outline: none;
+    }
+    select:focus, button:focus { box-shadow: 0 0 0 4px var(--ring); border-color: var(--primary); }
+    .row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+    .pill-group { display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { width: auto; cursor: pointer; user-select: none; }
+    .pill[data-active="true"] { border-color: var(--accent); background: rgba(34,211,238,.12); }
+
+    .btn { cursor: pointer; font-weight: 600; letter-spacing:.3px; }
+    .btn.primary { background: linear-gradient(180deg, #38bdf8, #06b6d4); color:#06202a; border: none; }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.ghost { background: transparent; border-color: rgba(148,163,184,.35); }
+
+    /* Question area */
+    .qa { padding: 14px; display:grid; gap:12px; }
+    .qa h3 { margin: 0; font-size: 18px; }
+    .options { display:grid; gap:10px; }
+    .option {
+      text-align:left; padding:10px 12px; border:1px solid rgba(148,163,184,.25); border-radius:12px; cursor:pointer;
+      background: rgba(2,6,23,.55);
+    }
+    .option.correct { border-color: rgba(34,197,94,.7); box-shadow: 0 0 0 3px rgba(34,197,94,.25) inset; }
+    .option.wrong { border-color: rgba(239,68,68,.7); box-shadow: 0 0 0 3px rgba(239,68,68,.2) inset; }
+
+    .status { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:14px; color: var(--muted); }
+    .tags { display:flex; gap:8px; flex-wrap:wrap; }
+    .tag { padding:6px 10px; border-radius:999px; border:1px solid rgba(148,163,184,.25); background: rgba(2,6,23,.5); }
+
+    .media { width:100%; border-radius:12px; border:1px solid rgba(148,163,184,.2); max-height:180px; object-fit:cover; display:none; }
+
+    footer { text-align:center; color: var(--muted); font-size: 12px; padding: 14px; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="sidebar">
-    <h2>World Quiz Game 🌍</h2>
-    <div id="settings">
-      <label>Difficulty:
-        <select id="difficulty">
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
-      </label><br>
-      <label>Mode:
-        <select id="mode">
-          <option value="classic">Classic</option>
-          <option value="timed">Timed (30s)</option>
-        </select>
-      </label><br>
-      <div id="topics">
-        <span class="pill" data-topic="countries" data-active="true">Countries</span>
-        <span class="pill" data-topic="foods" data-active="true">Foods</span>
-        <span class="pill" data-topic="animals" data-active="true">Animals</span>
-        <span class="pill" data-topic="weather" data-active="true">Weather</span>
+  <header>
+    <h1>🌍 English World Quiz — Fixed & Expanded</h1>
+    <p>Click a country and answer in English. Choose topic and difficulty first.</p>
+  </header>
+
+  <main class="container">
+    <!-- MAP CARD -->
+    <section class="card">
+      <div class="title"><span class="dot"></span><strong>Interactive World Map</strong></div>
+      <div id="map"></div>
+    </section>
+
+    <!-- CONTROL + QUESTION SIDEBAR -->
+    <aside class="card">
+      <div class="title"><span class="dot"></span><strong>Game Panel</strong></div>
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label for="difficulty">Difficulty</label>
+            <select id="difficulty">
+              <option value="easy">Easy (6th–7th)</option>
+              <option value="medium">Medium (8th–9th)</option>
+              <option value="hard">Hard (10th–11th)</option>
+            </select>
+          </div>
+          <div>
+            <label for="mode">Mode</label>
+            <select id="mode">
+              <option value="classic">Classic Quiz</option>
+              <option value="timed">Timed (30s)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label>Topics</label>
+          <div class="pill-group" id="topics">
+            <button class="pill" data-topic="countries" data-active="true">Countries</button>
+            <button class="pill" data-topic="foods" data-active="true">Foods</button>
+            <button class="pill" data-topic="animals" data-active="true">Animals</button>
+            <button class="pill" data-topic="weather" data-active="true">Weather</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="btn ghost" id="resetBtn">Reset score</button>
+          <button class="btn primary" id="startBtn">Start / Update</button>
+        </div>
+
+        <div class="status">
+          <div>Score: <strong id="score">0</strong></div>
+          <div>Lives: <strong id="lives">3</strong></div>
+          <div id="timerWrap" style="display:none;">⏱ <strong id="timer">30</strong>s</div>
+        </div>
+
+        <div class="tags" id="activeTags"></div>
+
+        <hr style="border: none; border-top: 1px solid rgba(148,163,184,.15);" />
+
+        <div class="qa">
+          <img id="qImage" class="media" alt="Question media" />
+          <h3 id="qText">Press <em>Start / Update</em> and pick a country.</h3>
+          <div class="options" id="options"></div>
+        </div>
       </div>
-      <button id="startBtn">Start Game</button>
-      <button id="resetBtn">Reset</button>
-    </div>
-    <h3>Question</h3>
-    <div id="question">
-      <p id="qText">Pick a country to start.</p>
-      <img id="qImage" style="display:none">
-      <div id="options"></div>
-    </div>
-    <h3>Status</h3>
-    <p>Score: <span id="score">0</span></p>
-    <p>Lives: <span id="lives">3</span></p>
-    <p id="timerWrap" style="display:none;">Time: <span id="timer">30</span></p>
-    <div id="tags">
-      Active topics: <span id="activeTags"></span>
-    </div>
-  </div>
+    </aside>
+  </main>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <footer>
+    Built for learning English vocabulary: countries, foods, animals, and weather.
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
   <script>
-    const $=id=>document.getElementById(id);
+    // ==================== STATE ====================
+    const state = {
+      difficulty: 'easy',
+      mode: 'classic',
+      topics: new Set(['countries','foods','animals','weather']),
+      score: 0,
+      lives: 3,
+      timer: null,
+      timeLeft: 30,
+      current: null, // {countryCode, topic, q, options, answer, img}
+      gameOver: false
+    };
 
+    const $ = (id) => document.getElementById(id);
+
+    // ==================== DATASET ====================
+    // Para evitar "bugs" por falta de preguntas, cada país/tópico tiene 3 preguntas (easy/medium/hard).
+    // Puedes ampliar libremente siguiendo el mismo formato.
     const DB = [
-      { country:"Brazil", code:"BR", lat:-10, lng:-55,
-        questions:{
-          countries:{
-            easy:[{q:"What is the capital of Brazil?",options:["Brasília","Rio","São Paulo","Salvador"],answer:0}],
-            medium:[{q:"Brazil is famous for which festival?",options:["Carnival","Oktoberfest","Diwali","Hanami"],answer:0}],
-            hard:[{q:"Which river is the largest in Brazil?",options:["Amazon","Nile","Yangtze","Danube"],answer:0}]
-          },
-          foods:{
-            easy:[{q:"Which food is typical in Brazil?",options:["Feijoada","Sushi","Pizza","Curry"],answer:0}],
-            medium:[{q:"Brazil is the largest producer of what bean?",options:["Coffee","Soy","Cocoa","Kidney"],answer:0}],
-            hard:[{q:"Açaí is originally from?",options:["Brazilian Amazon","India","USA","Spain"],answer:0}]
-          },
-          animals:{
-            easy:[{q:"Which animal lives in Amazon?",options:["Jaguar","Polar Bear","Kangaroo","Penguin"],answer:0,img:"https://upload.wikimedia.org/wikipedia/commons/0/0c/Jaguar_full.jpg"}],
-            medium:[{q:"Macaws are a type of?",options:["Bird","Fish","Reptile","Mammal"],answer:0}],
-            hard:[{q:"The Amazon river dolphin is also called?",options:["Pink dolphin","Blue dolphin","White dolphin","Gray dolphin"],answer:0}]
-          },
-          weather:{
-            easy:[{q:"Brazil mostly has a ___ climate.",options:["Tropical","Polar","Desert","Tundra"],answer:0}],
-            medium:[{q:"Which region of Brazil has the driest climate?",options:["Northeast","Amazon","South","Center"],answer:0}],
-            hard:[{q:"El Niño strongly affects weather in Brazil. True or False?",options:["True","False"],answer:0}]
-          }
+      {
+        country: 'United States', code: 'US', lat: 38.90, lng: -77.03,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of the United States?', options:['Washington, D.C.','New York','Los Angeles','Chicago'], answer:0 },
+            { level:'medium', q:'The United States is in which continent?', options:['North America','Europe','Asia','Africa'], answer:0 },
+            { level:'hard',   q:'Which is the de facto national language of the U.S.?', options:['English','Spanish','French','German'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which is a classic U.S. food?', options:['Hamburger','Pho','Paella','Bibimbap'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/4/4f/Hamburger_%28black_bg%29.jpg' },
+            { level:'medium', q:'Thanksgiving commonly features…', options:['Turkey','Tofu','Fish','Duck'], answer:0 },
+            { level:'hard',   q:'New England clam chowder is a type of…', options:['Stew','Salad','Bread','Juice'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'Which bird is a U.S. symbol?', options:['Bald eagle','Sparrow','Swan','Owl'], answer:0 },
+            { level:'medium', q:'Bison mainly live in…', options:['Prairies','Rainforests','Deserts','Tundra'], answer:0 },
+            { level:'hard',   q:'The grizzly bear is a subspecies of…', options:['Brown bear','Polar bear','Black bear','Panda'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Florida is known for ____ weather in summer.', options:['Hot and humid','Freezing','Snowy','Foggy'], answer:0 },
+            { level:'medium', q:'The Midwest sometimes has…', options:['Hurricanes','Tornadoes','Typhoons','Volcanic ash'], answer:1 },
+            { level:'hard',   q:'The Pacific Northwest is famous for frequent…', options:['Rain','Sandstorms','Hail','Heatwaves'], answer:0 }
+          ]
         }
       },
-      { country:"USA", code:"US", lat:38, lng:-97,
-        questions:{
-          countries:{
-            easy:[{q:"Capital of USA?",options:["Washington D.C.","New York","Los Angeles","Chicago"],answer:0}],
-            medium:[{q:"USA has how many states?",options:["50","48","52","49"],answer:0}],
-            hard:[{q:"Who was the first president of the USA?",options:["George Washington","Lincoln","Jefferson","Adams"],answer:0}]
-          },
-          foods:{
-            easy:[{q:"Which food is iconic in USA?",options:["Hamburger","Sushi","Tacos","Couscous"],answer:0}],
-            medium:[{q:"Thanksgiving meal usually includes?",options:["Turkey","Fish","Lamb","Beef"],answer:0}],
-            hard:[{q:"Apple pie is considered a symbol of?",options:["American culture","Chinese culture","French culture","Brazilian culture"],answer:0}]
-          },
-          animals:{
-            easy:[{q:"What is the national bird?",options:["Bald Eagle","Sparrow","Hawk","Crow"],answer:0}],
-            medium:[{q:"Bison are mostly found in?",options:["Plains","Deserts","Mountains","Cities"],answer:0}],
-            hard:[{q:"The grizzly bear is a subspecies of?",options:["Brown Bear","Polar Bear","Black Bear","Panda"],answer:0}]
-          },
-          weather:{
-            easy:[{q:"Florida has mostly ___ climate.",options:["Subtropical","Polar","Arid","Tundra"],answer:0}],
-            medium:[{q:"Tornado Alley is located in?",options:["Central USA","East Coast","West Coast","Alaska"],answer:0}],
-            hard:[{q:"Which ocean current influences California’s coast?",options:["California Current","Gulf Stream","Kuroshio","Peru Current"],answer:0}]
-          }
+      {
+        country: 'Brazil', code: 'BR', lat: -15.78, lng: -47.93,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of Brazil?', options:['Brasília','Rio de Janeiro','São Paulo','Salvador'], answer:0 },
+            { level:'medium', q:'Brazil is located in which continent?', options:['South America','Europe','Asia','Africa'], answer:0 },
+            { level:'hard',   q:'What is the official language of Brazil?', options:['Spanish','Portuguese','French','English'], answer:1 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which dish is traditional in Brazil?', options:['Feijoada','Sushi','Tacos','Paella'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/7/71/Feijoada.jpg' },
+            { level:'medium', q:'Açaí is commonly served as a…', options:['Soup','Juice bowl','Steak','Bread'], answer:1 },
+            { level:'hard',   q:'Pão de queijo is mainly made from…', options:['Wheat flour','Cassava starch','Cornmeal','Rice'], answer:1 }
+          ],
+          animals: [
+            { level:'easy',   q:'Which animal lives in the Amazon?', options:['Jaguar','Penguin','Polar bear','Kangaroo'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/9/9f/Standing_jaguar.jpg' },
+            { level:'medium', q:'The Amazon river dolphin is also called…', options:['Blue dolphin','Pink dolphin','Gray dolphin','River shark'], answer:1 },
+            { level:'hard',   q:'A capybara is the world’s largest…', options:['Rodent','Marsupial','Reptile','Bird'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Brazil often has a ____ climate near the equator.', options:['Tropical','Polar','Arid','Tundra'], answer:0 },
+            { level:'medium', q:'The Amazon rainforest is known for high…', options:['Humidity','Snowfall','Winds','Hail'], answer:0 },
+            { level:'hard',   q:'The southern region can experience…', options:['Blizzards','Frost and cooler winters','Monsoons','Sandstorms'], answer:1 }
+          ]
+        }
+      },
+      {
+        country: 'Japan', code: 'JP', lat: 35.68, lng: 139.76,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of Japan?', options:['Tokyo','Osaka','Kyoto','Sapporo'], answer:0 },
+            { level:'medium', q:'Japan is an _____ nation.', options:['Island','Landlocked','Desert','Polar'], answer:0 },
+            { level:'hard',   q:'The currency of Japan is the…', options:['Yen','Won','Yuan','Dollar'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which food is from Japan?', options:['Sushi','Tacos','Currywurst','Arepa'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/6/60/Sushi_platter.jpg' },
+            { level:'medium', q:'Miso soup is made with fermented…', options:['Soybean paste','Milk','Rice','Wheat'], answer:0 },
+            { level:'hard',   q:'Tempura is a technique of…', options:['Deep-frying','Boiling','Smoking','Fermenting'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The red-crowned crane symbolizes…', options:['Longevity','Anger','Silence','Winter'], answer:0 },
+            { level:'medium', q:'The Japanese macaque is also called…', options:['Snow monkey','River monkey','Forest monkey','Desert monkey'], answer:0 },
+            { level:'hard',   q:'Tanuki in folklore is a…', options:['Raccoon dog','Fox','Wolf','Cat'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Spring in Japan is famous for…', options:['Cherry blossoms','Sandstorms','Polar nights','Typhoons'], answer:0 },
+            { level:'medium', q:'Japan often experiences summer…', options:['Typhoons','Blizzards','Droughts','Dust devils'], answer:0 },
+            { level:'hard',   q:'Hokkaido winters are typically…', options:['Mild','Warm','Snowy and cold','Rainy'], answer:2 }
+          ]
+        }
+      },
+      {
+        country: 'France', code: 'FR', lat: 48.85, lng: 2.35,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of France?', options:['Paris','Lyon','Marseille','Nice'], answer:0 },
+            { level:'medium', q:'France is in which continent?', options:['Europe','Asia','Africa','Oceania'], answer:0 },
+            { level:'hard',   q:'The river that flows through Paris is the…', options:['Seine','Thames','Danube','Rhine'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'A common French bread is…', options:['Baguette','Naan','Pita','Rye bread'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/8/8c/Baguette_campagne%2C_four.jpg' },
+            { level:'medium', q:'Ratatouille is a dish of…', options:['Stewed vegetables','Raw meat','Fried fish','Sweet pastry'], answer:0 },
+            { level:'hard',   q:'Crème brûlée top is made by…', options:['Caramelizing sugar','Deep-frying','Freezing','Smoking'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The Camargue is known for wild…', options:['Horses','Penguins','Tigers','Kangaroos'], answer:0 },
+            { level:'medium', q:'The Pyrenees are habitat for…', options:['Brown bears','Polar bears','Koalas','Crocodiles'], answer:0 },
+            { level:'hard',   q:'European robin is a small…', options:['Bird','Mammal','Reptile','Amphibian'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'The Mediterranean coast is usually…', options:['Sunny and warm','Freezing','Humid tropical','Arctic'], answer:0 },
+            { level:'medium', q:'Winters in northern France can be…', options:['Mild and rainy','Extremely hot','Monsoon-like','Hurricane-prone'], answer:0 },
+            { level:'hard',   q:'Mistral is a strong…', options:['Wind','Earthquake','Tide','Volcano'], answer:0 }
+          ]
+        }
+      },
+      {
+        country: 'Egypt', code: 'EG', lat: 30.04, lng: 31.24,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of Egypt?', options:['Cairo','Alexandria','Giza','Luxor'], answer:0 },
+            { level:'medium', q:'Egypt is famous for the river…', options:['Nile','Amazon','Yangtze','Danube'], answer:0 },
+            { level:'hard',   q:'Egypt is primarily located in…', options:['North Africa','South America','Central Asia','Oceania'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Koshari is a mix of…', options:['Lentils, rice, pasta','Fish and chips','Beef and bread','Only vegetables'], answer:0 },
+            { level:'medium', q:'Tahini is made from…', options:['Sesame seeds','Peanuts','Almonds','Sunflower seeds'], answer:0 },
+            { level:'hard',   q:'Ful medames uses which main ingredient?', options:['Fava beans','Kidney beans','Chickpeas','Black beans'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The Sahara is home to…', options:['Fennec fox','Penguin','Polar bear','Moose'], answer:0 },
+            { level:'medium', q:'Nile crocodiles are large…', options:['Reptiles','Birds','Mammals','Fish'], answer:0 },
+            { level:'hard',   q:'Egyptian vulture is a…', options:['Bird of prey','Rodent','Amphibian','Marsupial'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Egypt’s climate is mostly…', options:['Desert (arid)','Polar','Tropical','Humid continental'], answer:0 },
+            { level:'medium', q:'Sandstorms are locally called…', options:['Khamsin','Haboob','Sirocco','Mistral'], answer:0 },
+            { level:'hard',   q:'Along the Nile Delta, summers are…', options:['Hot and humid','Cold','Rainy','Freezing'], answer:0 }
+          ]
+        }
+      },
+      {
+        country: 'Australia', code: 'AU', lat: -35.28, lng: 149.13,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of Australia?', options:['Canberra','Sydney','Melbourne','Perth'], answer:0 },
+            { level:'medium', q:'Australia is both a country and a…', options:['Continent','Province','Island chain','Peninsula'], answer:0 },
+            { level:'hard',   q:'Most Australians live near the…', options:['Coast','Mountains','Desert','Jungle'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Vegemite is a salty…', options:['Spread','Soup','Cheese','Drink'], answer:0 },
+            { level:'medium', q:'Lamington is a type of…', options:['Cake','Stew','Bread','Salad'], answer:0 },
+            { level:'hard',   q:'Pavlova is topped with…', options:['Fruit and cream','Meat','Cheese','Rice'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'Which animal is native to Australia?', options:['Kangaroo','Wolf','Lion','Camel'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/0/0c/Kangaroo_Australia_01.jpg' },
+            { level:'medium', q:'A koala mainly eats…', options:['Eucalyptus leaves','Bamboo','Grass','Fish'], answer:0 },
+            { level:'hard',   q:'The platypus is a…', options:['Monotreme','Marsupial','Reptile','Bird'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Northern Australia is often…', options:['Tropical','Polar','Arctic','Tundra'], answer:0 },
+            { level:'medium', q:'The interior Outback is mostly…', options:['Desert','Rainforest','Mountain','Coast'], answer:0 },
+            { level:'hard',   q:'The Great Barrier Reef is affected by…', options:['Coral bleaching','Snow','Sandstorms','Earthquakes'], answer:0 }
+          ]
+        }
+      },
+      {
+        country: 'Colombia', code: 'CO', lat: 4.71, lng: -74.07,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of Colombia?', options:['Bogotá','Medellín','Cali','Cartagena'], answer:0 },
+            { level:'medium', q:'Colombia is located in…', options:['South America','Europe','Asia','Oceania'], answer:0 },
+            { level:'hard',   q:'The official language of Colombia is…', options:['Spanish','Portuguese','English','French'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which is a typical Colombian food?', options:['Arepa','Sushi','Taco','Pizza'], answer:0, img:'https://upload.wikimedia.org/wikipedia/commons/5/5f/Arepas_de_Choclo_%28Colombia%29.jpg' },
+            { level:'medium', q:'Bandeja paisa includes…', options:['Beans and meat','Only fish','Only vegetables','Only fruit'], answer:0 },
+            { level:'hard',   q:'Ajiaco is a soup mainly made with…', options:['Potatoes and chicken','Beef and rice','Pasta and cheese','Corn and beans'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The Andean condor is a large…', options:['Bird','Mammal','Reptile','Fish'], answer:0 },
+            { level:'medium', q:'The Amazon in Colombia is home to…', options:['Pink river dolphin','Polar bear','Penguin','Moose'], answer:0 },
+            { level:'hard',   q:'Poison dart frogs are known for their…', options:['Bright colors','Large size','Feathers','Wool'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'Much of Colombia has a ____ climate near the equator.', options:['Tropical','Polar','Tundra','Arctic'], answer:0 },
+            { level:'medium', q:'Higher Andean cities like Bogotá are often…', options:['Cooler','Hotter','Stormier','Snowier'], answer:0 },
+            { level:'hard',   q:'The Pacific coast is known for very high…', options:['Rainfall','Snowfall','Hail','Dust'], answer:0 }
+          ]
+        }
+      },
+      {
+        country: 'India', code: 'IN', lat: 28.61, lng: 77.21,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of India?', options:['New Delhi','Mumbai','Kolkata','Bengaluru'], answer:0 },
+            { level:'medium', q:'India is located in…', options:['Asia','Europe','Africa','South America'], answer:0 },
+            { level:'hard',   q:'One of India’s official languages is…', options:['Hindi','Portuguese','German','Russian'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which is a popular Indian dish?', options:['Biryani','Tiramisu','Tacos','Sauerbraten'], answer:0 },
+            { level:'medium', q:'Dosa is a type of…', options:['Fermented crepe','Soup','Salad','Noodle'], answer:0 },
+            { level:'hard',   q:'Butter chicken is commonly eaten with…', options:['Naan','Tortilla','Rye bread','Pita'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The Bengal tiger is native to…', options:['India','Iceland','Chile','Norway'], answer:0 },
+            { level:'medium', q:'The peacock is India’s national…', options:['Bird','Animal','Tree','Flower'], answer:0 },
+            { level:'hard',   q:'Asian elephants are…', options:['Mammals','Birds','Reptiles','Amphibians'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'India’s summer monsoon brings heavy…', options:['Rain','Snow','Dust','Hail'], answer:0 },
+            { level:'medium', q:'The Thar Desert region is mostly…', options:['Arid','Polar','Humid tropical','Tundra'], answer:0 },
+            { level:'hard',   q:'Winters in northern India can be…', options:['Cool to cold','Always hot','Arctic','Typhoon-prone'], answer:0 }
+          ]
+        }
+      },
+      {
+        country: 'Argentina', code: 'AR', lat: -38.41 , lng: -63.61,
+        questions: {
+          countries: [
+            { level:'easy',   q:'What is the capital of aRGENTINA?', options:['New Delhi','Cordoba','Rosario','Buenos Aires'], answer:0 },
+            { level:'medium', q:'India is located in…', options:['Asia','Europe','Africa','South America'], answer:0 },
+            { level:'hard',   q:'One of India’s official languages is…', options:['Hindi','Portuguese','German','Russian'], answer:0 }
+          ],
+          foods: [
+            { level:'easy',   q:'Which is a popular Indian dish?', options:['Biryani','Tiramisu','Tacos','Sauerbraten'], answer:0 },
+            { level:'medium', q:'Dosa is a type of…', options:['Fermented crepe','Soup','Salad','Noodle'], answer:0 },
+            { level:'hard',   q:'Butter chicken is commonly eaten with…', options:['Naan','Tortilla','Rye bread','Pita'], answer:0 }
+          ],
+          animals: [
+            { level:'easy',   q:'The Bengal tiger is native to…', options:['India','Iceland','Chile','Norway'], answer:0 },
+            { level:'medium', q:'The peacock is India’s national…', options:['Bird','Animal','Tree','Flower'], answer:0 },
+            { level:'hard',   q:'Asian elephants are…', options:['Mammals','Birds','Reptiles','Amphibians'], answer:0 }
+          ],
+          weather: [
+            { level:'easy',   q:'India’s summer monsoon brings heavy…', options:['Rain','Snow','Dust','Hail'], answer:0 },
+            { level:'medium', q:'The Thar Desert region is mostly…', options:['Arid','Polar','Humid tropical','Tundra'], answer:0 },
+            { level:'hard',   q:'Winters in northern India can be…', options:['Cool to cold','Always hot','Arctic','Typhoon-prone'], answer:0 }
+          ]
         }
       }
     ];
 
-    let state = {
-      difficulty:"easy", mode:"classic", topics:new Set(["countries","foods","animals","weather"]),
-      score:0, lives:3, timer:null, timeLeft:30, current:null
-    };
+    // ==================== MAP INIT ====================
+    const map = L.map('map').setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 6, minZoom: 2
+    }).addTo(map);
 
-    // MAP
-    const map = L.map('map').setView([20,0],2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:"© OSM",maxZoom:6,minZoom:2}).addTo(map);
-
-    DB.forEach(c=>{
-      const marker=L.marker([c.lat,c.lng]).addTo(map).bindPopup(c.country);
-      marker.on('click',()=>askQuestion(c));
+    // Add markers safely
+    DB.forEach(c => {
+      const marker = L.marker([c.lat, c.lng]).addTo(map).bindPopup(c.country);
+      marker.on('click', () => onCountryClick(c));
     });
 
-    function askQuestion(country){
-      const topics=[...state.topics];
-      if(topics.length===0){ alert("Select at least one topic."); return;}
-      const topic=topics[Math.floor(Math.random()*topics.length)];
-      const qList=country.questions[topic][state.difficulty];
-      const qData=qList[Math.floor(Math.random()*qList.length)];
-      state.current={country:country.code,topic,...qData};
-      $('qText').textContent=qData.q;
-      $('options').innerHTML='';
-      if(qData.img){ $('qImage').src=qData.img; $('qImage').style.display='block';}
-      else $('qImage').style.display='none';
-      qData.options.forEach((opt,i)=>{
-        const btn=document.createElement('div');
-        btn.textContent=opt; btn.className='option';
-        btn.onclick=()=>checkAnswer(i);
+    // ==================== GAME CORE ====================
+    function onCountryClick(country){
+      if(state.gameOver){
+        alert('Game over. Press Start to play again.');
+        return;
+      }
+      const activeTopics = [...state.topics];
+      if(activeTopics.length === 0){
+        alert('Select at least one topic.');
+        return;
+      }
+      const topic = activeTopics[Math.floor(Math.random()*activeTopics.length)];
+      const q = pickQuestion(country, topic, state.difficulty);
+      if(!q){
+        alert('No questions available for this selection. Try another topic/difficulty.');
+        return;
+      }
+      state.current = { countryCode: country.code, topic, ...q };
+      renderQuestion(state.current);
+      // If mode is timed and no timer running, start it
+      if(state.mode === 'timed' && !state.timer){ startTimer(); }
+    }
+
+    function pickQuestion(country, topic, difficulty){
+      try {
+        const pool = country.questions?.[topic] || [];
+        // Our structure: array of 3, each with level
+        const matches = pool.filter(item => item.level === difficulty);
+        if(matches.length > 0){
+          return matches[Math.floor(Math.random()*matches.length)];
+        }
+        // Fallback: any question in this topic
+        if(pool.length > 0){
+          return pool[Math.floor(Math.random()*pool.length)];
+        }
+        return null;
+      } catch(e){
+        console.error('pickQuestion error', e);
+        return null;
+      }
+    }
+
+    function renderQuestion(q){
+      $('qText').textContent = q.q;
+      $('options').innerHTML = '';
+      const imgEl = $('qImage');
+      if(q.img){ imgEl.src = q.img; imgEl.style.display = 'block'; }
+      else { imgEl.style.display = 'none'; }
+
+      q.options.forEach((opt, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'option';
+        btn.textContent = opt;
+        btn.addEventListener('click', () => checkAnswer(i));
         $('options').appendChild(btn);
       });
     }
 
     function checkAnswer(choice){
-      const correct=state.current.answer;
-      const opts=document.querySelectorAll('.option');
-      opts.forEach((el,i)=>{
-        if(i===correct)el.classList.add('correct');
-        if(i===choice&&i!==correct)el.classList.add('wrong');
-        el.style.pointerEvents='none';
+      if(!state.current) return; // guard
+      const correct = state.current.answer;
+      const opts = document.querySelectorAll('.option');
+      opts.forEach((el, i) => {
+        if(i === correct) el.classList.add('correct');
+        if(i === choice && i !== correct) el.classList.add('wrong');
+        el.style.pointerEvents = 'none';
       });
-      if(choice===correct) state.score+=10;
-      else state.lives-=1;
+
+      if(choice === correct){ state.score += 10; }
+      else { state.lives -= 1; }
       updateHUD();
-      if(state.lives<=0){ setTimeout(()=>alert('Game Over! Score: '+state.score),500);}
+
+      if(state.lives <= 0){
+        state.gameOver = true;
+        clearInterval(state.timer); state.timer = null;
+        setTimeout(() => alert('Game Over! Final score: ' + state.score), 300);
+        return;
+      }
     }
 
+    // ==================== HUD / CONTROLS ====================
     function updateHUD(){
-      $('score').textContent=state.score;
-      $('lives').textContent=state.lives;
+      $('score').textContent = state.score;
+      $('lives').textContent = state.lives;
     }
 
-    $('resetBtn').onclick=()=>{
-      state.score=0; state.lives=3; updateHUD();
-      $('qText').textContent="Pick a country to start.";
-      $('options').innerHTML=''; $('qImage').style.display='none';
-    };
-
-    $('startBtn').onclick=()=>{
-      state.difficulty=$('difficulty').value;
-      state.mode=$('mode').value;
-      state.topics.clear();
-      document.querySelectorAll('#topics .pill').forEach(p=>{
-        if(p.dataset.active==='true') state.topics.add(p.dataset.topic);
-      });
-      if(state.mode==='timed'){ $('timerWrap').style.display='block'; startTimer();}
-      else{ $('timerWrap').style.display='none'; clearInterval(state.timer);}
-      $('activeTags').innerHTML=''; state.topics.forEach(t=>{
-        const span=document.createElement('span'); span.className='tag'; span.textContent=t;
-        $('activeTags').appendChild(span);
-      });
-    };
-
-    function startTimer(){
-      clearInterval(state.timer); state.timeLeft=30;
-      $('timer').textContent=state.timeLeft;
-      state.timer=setInterval(()=>{
-        state.timeLeft--; $('timer').textContent=state.timeLeft;
-        if(state.timeLeft<=0){ clearInterval(state.timer); alert("⏱ Time up! Final score: "+state.score);}
-      },1000);
+    function resetUIMessage(){
+      $('qText').innerHTML = 'Press <em>Start / Update</em> and pick a country.';
+      $('options').innerHTML = '';
+      $('qImage').style.display = 'none';
     }
 
-    document.querySelectorAll('#topics .pill').forEach(p=>{
-      p.onclick=()=>{ const active=p.dataset.active==='true'; p.dataset.active=(!active).toString();};
+    $('resetBtn').addEventListener('click', () => {
+      // Full soft reset
+      state.score = 0;
+      state.lives = 3;
+      state.gameOver = false;
+      clearInterval(state.timer); state.timer = null;
+      $('timerWrap').style.display = 'none';
+      state.timeLeft = 30; $('timer').textContent = state.timeLeft;
+      updateHUD();
+      resetUIMessage();
     });
 
+    $('startBtn').addEventListener('click', () => {
+      // Apply settings and reset round
+      state.difficulty = $('difficulty').value;
+      state.mode       = $('mode').value;
+      state.topics.clear();
+      document.querySelectorAll('#topics .pill').forEach(p => {
+        if(p.dataset.active === 'true') state.topics.add(p.dataset.topic);
+      });
+      // Reset gameplay
+      state.score = 0; state.lives = 3; state.gameOver = false; updateHUD();
+      state.current = null; resetUIMessage();
+      // Timer
+      clearInterval(state.timer); state.timer = null;
+      state.timeLeft = 30; $('timer').textContent = state.timeLeft;
+      if(state.mode === 'timed'){
+        $('timerWrap').style.display = 'block';
+        startTimer();
+      } else {
+        $('timerWrap').style.display = 'none';
+      }
+      // Show active tags
+      $('activeTags').innerHTML = '';
+      state.topics.forEach(t => {
+        const span = document.createElement('span');
+        span.className = 'tag'; span.textContent = t;
+        $('activeTags').appendChild(span);
+      });
+    });
+
+    // Topic toggle buttons
+    document.querySelectorAll('#topics .pill').forEach(p => {
+      p.addEventListener('click', () => {
+        const active = p.dataset.active === 'true';
+        p.dataset.active = (!active).toString();
+        if(p.dataset.active === 'true'){
+          p.style.borderColor = 'var(--accent)'; p.style.background = 'rgba(34,211,238,.12)';
+        } else {
+          p.style.borderColor = 'rgba(148,163,184,.2)'; p.style.background = 'rgba(2,6,23,.6)';
+        }
+      });
+    });
+
+    // Timer logic
+    function startTimer(){
+      clearInterval(state.timer);
+      state.timeLeft = 30; $('timer').textContent = state.timeLeft;
+      state.timer = setInterval(() => {
+        state.timeLeft -= 1; $('timer').textContent = state.timeLeft;
+        if(state.timeLeft <= 0){
+          clearInterval(state.timer); state.timer = null;
+          state.gameOver = true;
+          alert('⏱ Time is up! Final score: ' + state.score);
+        }
+      }, 1000);
+    }
+
+    // Init HUD
     updateHUD();
   </script>
 </body>
