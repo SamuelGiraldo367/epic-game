@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>World Quiz Game</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      margin:0; font-family:Arial, sans-serif; background:#f4f6f9; color:#333;
+      display:flex; height:100vh;
+    }
+    #map { flex:2; }
+    #sidebar {
+      flex:1; background:white; padding:15px; display:flex; flex-direction:column;
+      border-left:2px solid #ddd;
+    }
+    h2 { margin:5px 0; }
+    .option { background:#e0e0e0; margin:5px 0; padding:8px; border-radius:8px; cursor:pointer; }
+    .option:hover { background:#d0d0ff; }
+    .correct { background:#a0e7a0 !important; }
+    .wrong { background:#f8a0a0 !important; }
+    .pill {
+      display:inline-block; padding:5px 10px; border-radius:20px; margin:2px;
+      cursor:pointer; background:#ddd;
+    }
+    .pill[data-active="true"] { background:#7dafff; color:white; }
+    .tag { display:inline-block; padding:3px 7px; margin:2px; background:#7dafff; color:white; border-radius:12px; font-size:0.8em; }
+    img { max-width:100%; margin:10px 0; border-radius:10px; }
+    button { margin:5px; padding:8px 12px; border:none; border-radius:6px; cursor:pointer; }
+    #resetBtn { background:#f66; color:white; }
+    #startBtn { background:#6c6; color:white; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="sidebar">
+    <h2>World Quiz Game 🌍</h2>
+    <div id="settings">
+      <label>Difficulty:
+        <select id="difficulty">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label><br>
+      <label>Mode:
+        <select id="mode">
+          <option value="classic">Classic</option>
+          <option value="timed">Timed (30s)</option>
+        </select>
+      </label><br>
+      <div id="topics">
+        <span class="pill" data-topic="countries" data-active="true">Countries</span>
+        <span class="pill" data-topic="foods" data-active="true">Foods</span>
+        <span class="pill" data-topic="animals" data-active="true">Animals</span>
+        <span class="pill" data-topic="weather" data-active="true">Weather</span>
+      </div>
+      <button id="startBtn">Start Game</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <h3>Question</h3>
+    <div id="question">
+      <p id="qText">Pick a country to start.</p>
+      <img id="qImage" style="display:none">
+      <div id="options"></div>
+    </div>
+    <h3>Status</h3>
+    <p>Score: <span id="score">0</span></p>
+    <p>Lives: <span id="lives">3</span></p>
+    <p id="timerWrap" style="display:none;">Time: <span id="timer">30</span></p>
+    <div id="tags">
+      Active topics: <span id="activeTags"></span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const $=id=>document.getElementById(id);
+
+    const DB = [
+      { country:"Brazil", code:"BR", lat:-10, lng:-55,
+        questions:{
+          countries:{
+            easy:[{q:"What is the capital of Brazil?",options:["Brasília","Rio","São Paulo","Salvador"],answer:0}],
+            medium:[{q:"Brazil is famous for which festival?",options:["Carnival","Oktoberfest","Diwali","Hanami"],answer:0}],
+            hard:[{q:"Which river is the largest in Brazil?",options:["Amazon","Nile","Yangtze","Danube"],answer:0}]
+          },
+          foods:{
+            easy:[{q:"Which food is typical in Brazil?",options:["Feijoada","Sushi","Pizza","Curry"],answer:0}],
+            medium:[{q:"Brazil is the largest producer of what bean?",options:["Coffee","Soy","Cocoa","Kidney"],answer:0}],
+            hard:[{q:"Açaí is originally from?",options:["Brazilian Amazon","India","USA","Spain"],answer:0}]
+          },
+          animals:{
+            easy:[{q:"Which animal lives in Amazon?",options:["Jaguar","Polar Bear","Kangaroo","Penguin"],answer:0,img:"https://upload.wikimedia.org/wikipedia/commons/0/0c/Jaguar_full.jpg"}],
+            medium:[{q:"Macaws are a type of?",options:["Bird","Fish","Reptile","Mammal"],answer:0}],
+            hard:[{q:"The Amazon river dolphin is also called?",options:["Pink dolphin","Blue dolphin","White dolphin","Gray dolphin"],answer:0}]
+          },
+          weather:{
+            easy:[{q:"Brazil mostly has a ___ climate.",options:["Tropical","Polar","Desert","Tundra"],answer:0}],
+            medium:[{q:"Which region of Brazil has the driest climate?",options:["Northeast","Amazon","South","Center"],answer:0}],
+            hard:[{q:"El Niño strongly affects weather in Brazil. True or False?",options:["True","False"],answer:0}]
+          }
+        }
+      },
+      { country:"USA", code:"US", lat:38, lng:-97,
+        questions:{
+          countries:{
+            easy:[{q:"Capital of USA?",options:["Washington D.C.","New York","Los Angeles","Chicago"],answer:0}],
+            medium:[{q:"USA has how many states?",options:["50","48","52","49"],answer:0}],
+            hard:[{q:"Who was the first president of the USA?",options:["George Washington","Lincoln","Jefferson","Adams"],answer:0}]
+          },
+          foods:{
+            easy:[{q:"Which food is iconic in USA?",options:["Hamburger","Sushi","Tacos","Couscous"],answer:0}],
+            medium:[{q:"Thanksgiving meal usually includes?",options:["Turkey","Fish","Lamb","Beef"],answer:0}],
+            hard:[{q:"Apple pie is considered a symbol of?",options:["American culture","Chinese culture","French culture","Brazilian culture"],answer:0}]
+          },
+          animals:{
+            easy:[{q:"What is the national bird?",options:["Bald Eagle","Sparrow","Hawk","Crow"],answer:0}],
+            medium:[{q:"Bison are mostly found in?",options:["Plains","Deserts","Mountains","Cities"],answer:0}],
+            hard:[{q:"The grizzly bear is a subspecies of?",options:["Brown Bear","Polar Bear","Black Bear","Panda"],answer:0}]
+          },
+          weather:{
+            easy:[{q:"Florida has mostly ___ climate.",options:["Subtropical","Polar","Arid","Tundra"],answer:0}],
+            medium:[{q:"Tornado Alley is located in?",options:["Central USA","East Coast","West Coast","Alaska"],answer:0}],
+            hard:[{q:"Which ocean current influences California’s coast?",options:["California Current","Gulf Stream","Kuroshio","Peru Current"],answer:0}]
+          }
+        }
+      }
+    ];
+
+    let state = {
+      difficulty:"easy", mode:"classic", topics:new Set(["countries","foods","animals","weather"]),
+      score:0, lives:3, timer:null, timeLeft:30, current:null
+    };
+
+    // MAP
+    const map = L.map('map').setView([20,0],2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:"© OSM",maxZoom:6,minZoom:2}).addTo(map);
+
+    DB.forEach(c=>{
+      const marker=L.marker([c.lat,c.lng]).addTo(map).bindPopup(c.country);
+      marker.on('click',()=>askQuestion(c));
+    });
+
+    function askQuestion(country){
+      const topics=[...state.topics];
+      if(topics.length===0){ alert("Select at least one topic."); return;}
+      const topic=topics[Math.floor(Math.random()*topics.length)];
+      const qList=country.questions[topic][state.difficulty];
+      const qData=qList[Math.floor(Math.random()*qList.length)];
+      state.current={country:country.code,topic,...qData};
+      $('qText').textContent=qData.q;
+      $('options').innerHTML='';
+      if(qData.img){ $('qImage').src=qData.img; $('qImage').style.display='block';}
+      else $('qImage').style.display='none';
+      qData.options.forEach((opt,i)=>{
+        const btn=document.createElement('div');
+        btn.textContent=opt; btn.className='option';
+        btn.onclick=()=>checkAnswer(i);
+        $('options').appendChild(btn);
+      });
+    }
+
+    function checkAnswer(choice){
+      const correct=state.current.answer;
+      const opts=document.querySelectorAll('.option');
+      opts.forEach((el,i)=>{
+        if(i===correct)el.classList.add('correct');
+        if(i===choice&&i!==correct)el.classList.add('wrong');
+        el.style.pointerEvents='none';
+      });
+      if(choice===correct) state.score+=10;
+      else state.lives-=1;
+      updateHUD();
+      if(state.lives<=0){ setTimeout(()=>alert('Game Over! Score: '+state.score),500);}
+    }
+
+    function updateHUD(){
+      $('score').textContent=state.score;
+      $('lives').textContent=state.lives;
+    }
+
+    $('resetBtn').onclick=()=>{
+      state.score=0; state.lives=3; updateHUD();
+      $('qText').textContent="Pick a country to start.";
+      $('options').innerHTML=''; $('qImage').style.display='none';
+    };
+
+    $('startBtn').onclick=()=>{
+      state.difficulty=$('difficulty').value;
+      state.mode=$('mode').value;
+      state.topics.clear();
+      document.querySelectorAll('#topics .pill').forEach(p=>{
+        if(p.dataset.active==='true') state.topics.add(p.dataset.topic);
+      });
+      if(state.mode==='timed'){ $('timerWrap').style.display='block'; startTimer();}
+      else{ $('timerWrap').style.display='none'; clearInterval(state.timer);}
+      $('activeTags').innerHTML=''; state.topics.forEach(t=>{
+        const span=document.createElement('span'); span.className='tag'; span.textContent=t;
+        $('activeTags').appendChild(span);
+      });
+    };
+
+    function startTimer(){
+      clearInterval(state.timer); state.timeLeft=30;
+      $('timer').textContent=state.timeLeft;
+      state.timer=setInterval(()=>{
+        state.timeLeft--; $('timer').textContent=state.timeLeft;
+        if(state.timeLeft<=0){ clearInterval(state.timer); alert("⏱ Time up! Final score: "+state.score);}
+      },1000);
+    }
+
+    document.querySelectorAll('#topics .pill').forEach(p=>{
+      p.onclick=()=>{ const active=p.dataset.active==='true'; p.dataset.active=(!active).toString();};
+    });
+
+    updateHUD();
+  </script>
+</body>
+</html>
